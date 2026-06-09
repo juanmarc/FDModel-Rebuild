@@ -1,0 +1,19 @@
+model_param.dat			model parameters file
+testRun					name of run
+02 14 15				execution date
+2.0D3					dx, x direction grid spacing in meters
+2.0D3					dy, y direction grid spacing in meters
+301						n, number of gridpoints in x-direction (must be odd)
+301						m, number of gridpoints in y-direction (must be odd)
+7.5d0					dt, time step in seconds
+9.81d0					g, gravitational constant in m/s**2
+5.0d-5					f0, Coriolis parameter 1/s (use 5.0d-5 for 20N)
+0.0D0					beta, beta parameter for 1/(m*s)
+7.292D-5				angular rotation rate of Earth 1/s
+100.0D0					nu, viscosity
+no						restart a previous run (yes/no)
+8						if restart, hour of last good output
+11520					maxtimecount, maximum number of time iterations
+960						outputinc, number of increments between model outputs
+0						order:  2nd order (0) or 4th order (1)
+0						state: ring (0), monopole (1), cimcumpolar (0)

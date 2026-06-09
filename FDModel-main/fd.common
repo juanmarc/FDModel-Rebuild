@@ -1,0 +1,21 @@
+C*****7***************************************************************72
+C       common block text and code
+C*****7***************************************************************72
+      integer nmax,mmax,n,m,nm1max,mm1max,nm1,mm1,wdim,idimy
+      parameter (nmax=603,mmax=603,nm1max=602,mm1max=602)
+      parameter (wdim=6*nm1max+5*mm1max)
+
+      double precision zeta(mmax,nmax), psi(mmax,nmax)
+      double precision theta(mmax,nmax), radius(mmax,nmax)
+      double precision f0, beta, omega, g
+      double precision dx, dy, dt, nu
+      double precision a(mm1max), b(mm1max), c(mm1max)
+
+      integer order, state, timecount, maxTimeCount, outputInc
+
+      real lastGood
+
+      logical restart, scndOrder,frthOrder
+C*****7***************************************************************72
+C       end common block text and code
+C*****7***************************************************************72
