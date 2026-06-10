@@ -46,3 +46,63 @@ def summarize_vorticity(zeta: np.ndarray, grid: PeriodicGrid) -> dict[str, float
         "zeta_max": zeta_max,
         "enstrophy": enstrophy(zeta, grid),
     }
+
+
+def azimuthal_mean_profile(
+    field: np.ndarray,
+    grid: PeriodicGrid,
+    bin_width: float,
+    center: tuple[float, float] | None = None,
+    max_radius: float | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return radial bin centers, azimuthal means, and sample counts."""
+
+    if field.shape != grid.shape:
+        raise ValueError(f"field shape {field.shape} does not match grid shape {grid.shape}")
+    if bin_width <= 0.0:
+        raise ValueError("bin_width must be positive")
+
+    _, _, radius = _radial_distance(grid, center)
+    if max_radius is None:
+        max_radius = float(np.max(radius))
+    nbins = int(np.floor(max_radius / bin_width)) + 1
+    bin_index = np.floor(radius / bin_width).astype(int)
+    mask = bin_index < nbins
+
+    sums = np.bincount(bin_index[mask].ravel(), weights=field[mask].ravel(), minlength=nbins)
+    counts = np.bincount(bin_index[mask].ravel(), minlength=nbins)
+    means = np.full(nbins, np.nan, dtype=float)
+    valid = counts > 0
+    means[valid] = sums[valid] / counts[valid]
+    centers = (np.arange(nbins) + 0.5) * bin_width
+    return centers, means, counts
+
+
+def radial_wind_profile(
+    u: np.ndarray,
+    v: np.ndarray,
+    grid: PeriodicGrid,
+    bin_width: float,
+    center: tuple[float, float] | None = None,
+    max_radius: float | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return azimuthal-mean tangential wind as a radial profile."""
+
+    if u.shape != grid.shape or v.shape != grid.shape:
+        raise ValueError("u and v must both match grid shape")
+
+    dx, dy, radius = _radial_distance(grid, center)
+    tangential = np.zeros(grid.shape, dtype=float)
+    nonzero = radius > 0.0
+    tangential[nonzero] = (-u[nonzero] * dy[nonzero] + v[nonzero] * dx[nonzero]) / radius[nonzero]
+    return azimuthal_mean_profile(tangential, grid, bin_width, center=center, max_radius=max_radius)
+
+
+def _radial_distance(
+    grid: PeriodicGrid,
+    center: tuple[float, float] | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    cx, cy = center if center is not None else (0.5 * grid.lx, 0.5 * grid.ly)
+    dx = (grid.X - cx + 0.5 * grid.lx) % grid.lx - 0.5 * grid.lx
+    dy = (grid.Y - cy + 0.5 * grid.ly) % grid.ly - 0.5 * grid.ly
+    return dx, dy, np.hypot(dx, dy)
