@@ -11,7 +11,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from fdmodel.io import load_metadata_npz
 from fdmodel.plotting import plot_state_file
 
 
@@ -29,12 +28,10 @@ def main() -> None:
     args = parse_args()
     os.environ.setdefault("MPLCONFIGDIR", str(PROJECT_ROOT / "runs" / "output" / "matplotlib-cache"))
     os.environ.setdefault("XDG_CACHE_HOME", str(PROJECT_ROOT / "runs" / "output" / "font-cache"))
-    metadata = load_metadata_npz(args.state_file)
-    title = f"{metadata['case']} {metadata['component']} initial conditions"
     plan_path, radial_path = plot_state_file(
         args.state_file,
         args.output_dir,
-        title=title,
+        title=None,
         bin_width=args.bin_width,
         extent_radius=args.extent_radius,
         max_radius=args.max_radius,

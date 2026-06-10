@@ -9,7 +9,7 @@ import numpy as np
 from .diagnostics import azimuthal_mean_profile, radial_wind_profile
 from .fields import ModelState
 from .grid import PeriodicGrid
-from .io import load_state_npz
+from .io import load_metadata_npz, load_state_npz
 
 
 def plot_vorticity_plan_view(
@@ -19,6 +19,7 @@ def plot_vorticity_plan_view(
     title: str,
     extent_radius: float | None = None,
     levels: np.ndarray | None = None,
+    annotate_extrema: bool = True,
 ) -> None:
     """Plot a plan view of vorticity and save it to ``path``."""
 
@@ -39,18 +40,21 @@ def plot_vorticity_plan_view(
         zeta = zeta[np.ix_(ymask, xmask)]
 
     if levels is None:
-        max_abs = float(np.nanmax(np.abs(zeta)))
-        levels = np.linspace(-max_abs, max_abs, 17)
+        levels = _vorticity_contour_levels()
 
     fig, ax = plt.subplots(figsize=(6.0, 5.8), constrained_layout=True)
-    contour_fill = ax.contourf(x, y, zeta, levels=levels, cmap="RdBu_r", extend="both")
-    contours = ax.contour(x, y, zeta, levels=levels, colors="black", linewidths=0.6)
-    ax.clabel(contours, inline=True, fontsize=8)
-    fig.colorbar(contour_fill, ax=ax, label="vorticity")
+    ax.set_facecolor("white")
+    _shade_vorticity_bands(ax, x, y, zeta)
+    contour_levels = levels[(levels >= float(np.nanmin(zeta))) & (levels <= float(np.nanmax(zeta)))]
+    if contour_levels.size:
+        contours = ax.contour(x, y, zeta, levels=contour_levels, colors="black", linewidths=0.7)
+        ax.clabel(contours, inline=True, fontsize=8, fmt=_format_scientific_label)
     ax.set_title(title)
     ax.set_xlabel(f"x ({coord_label})")
     ax.set_ylabel(f"y ({coord_label})")
     ax.set_aspect("equal")
+    if annotate_extrema:
+        _annotate_extrema(ax, zeta)
     fig.savefig(path, dpi=180)
     plt.close(fig)
 
@@ -101,7 +105,7 @@ def plot_state_file(
     state_path: str | Path,
     output_dir: str | Path,
     *,
-    title: str,
+    title: str | None = None,
     bin_width: float,
     extent_radius: float | None = None,
     max_radius: float | None = None,
@@ -109,14 +113,50 @@ def plot_state_file(
     """Read one saved state and write plan/radial plots."""
 
     state = load_state_npz(state_path)
+    metadata = load_metadata_npz(state_path)
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     stem = Path(state_path).stem
-    plan_path = output / f"{stem}_init_plan.png"
-    radial_path = output / f"{stem}_init_radial.png"
+    suffix = "init" if _is_initial_condition(metadata) else "evolution"
+    plan_path = output / f"{stem}_{suffix}_plan.png"
+    radial_path = output / f"{stem}_{suffix}_radial.png"
+    if title is None:
+        title = _title_from_metadata(metadata)
     plot_vorticity_plan_view(state, plan_path, title=title, extent_radius=extent_radius)
     plot_radial_profiles(state, radial_path, title=title, bin_width=bin_width, max_radius=max_radius)
     return plan_path, radial_path
+
+
+def _title_from_metadata(metadata: dict[str, str]) -> str:
+    if "time_hours" in metadata:
+        return f"Vorticity at t={float(metadata['time_hours']):.2f} h"
+    if metadata.get("component") == "evolution":
+        return "Vorticity at t=0.00 h"
+    case = metadata.get("case", "state")
+    component = metadata.get("component", "")
+    return f"{case} {component} initial conditions".strip()
+
+
+def _is_initial_condition(metadata: dict[str, str]) -> bool:
+    return metadata.get("component") != "evolution"
+
+
+def _annotate_extrema(ax, zeta: np.ndarray) -> None:
+    max_text = f"Max={float(np.nanmax(zeta)):.5g} s$^{{-1}}$"
+    min_text = f"Min={float(np.nanmin(zeta)):.5g} s$^{{-1}}$"
+    text_style = {
+        "transform": ax.transAxes,
+        "fontsize": 7.5,
+        "verticalalignment": "bottom",
+        "bbox": {"boxstyle": "square,pad=0.2", "facecolor": "white", "edgecolor": "none", "alpha": 0.75},
+    }
+    ax.text(0.02, 0.03, max_text, horizontalalignment="left", **text_style)
+    ax.text(0.98, 0.03, min_text, horizontalalignment="right", **text_style)
+
+
+def _format_scientific_label(value: float) -> str:
+    coefficient, exponent = f"{value:.2e}".split("e")
+    return f"{coefficient}x10$^{{{int(exponent)}}}$"
 
 
 def _import_pyplot():
@@ -132,3 +172,18 @@ def _import_pyplot():
 
 def _coordinate_scale(grid: PeriodicGrid) -> float:
     return 1000.0 if max(grid.lx, grid.ly) > 10_000.0 else 1.0
+
+
+def _vorticity_contour_levels() -> np.ndarray:
+    return np.array([5.0e-5] + [level * 1.0e-4 for level in range(1, 11)], dtype=float)
+
+
+def _shade_vorticity_bands(ax, x: np.ndarray, y: np.ndarray, zeta: np.ndarray) -> None:
+    zeta_min = float(np.nanmin(zeta))
+    zeta_max = float(np.nanmax(zeta))
+    if zeta_min < 5.0e-5 and zeta_max > 5.0e-5:
+        upper = min(1.0e-4, zeta_max)
+        if upper > 5.0e-5:
+            ax.contourf(x, y, zeta, levels=[5.0e-5, upper], colors=["0.6"])
+    if zeta_max >= 1.0e-3:
+        ax.contourf(x, y, zeta, levels=[1.0e-3, zeta_max + 1.0e-12], colors=["black"])
