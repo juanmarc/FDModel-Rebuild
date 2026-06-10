@@ -51,6 +51,26 @@ def test_ring_initial_states_include_base_perturbation_and_total():
     assert states["perturbation"].zeta.min() < 0.0
 
 
+def test_ring_initial_states_use_centered_grid_origin():
+    grid = make_centered_periodic_grid(301, 301, dx=2.0e3, dy=2.0e3)
+
+    states = schubert_ring_initial_states(grid)
+
+    assert states["base"].zeta.shape == grid.shape
+    assert abs(trapezoidal_circulation(states["total"].zeta, grid)) < 1.0e-7
+    assert states["base"].zeta[150, 150] > 0.0
+    assert states["base"].zeta[0, 0] < 0.0
+
+
+def test_ring_perturbation_uses_eight_percent_peak_amplitude():
+    grid = make_centered_periodic_grid(301, 301, dx=2.0e3, dy=2.0e3)
+
+    perturbation = schubert_ring_initial_states(grid)["perturbation"].zeta
+
+    assert np.isclose(float(np.max(perturbation)), 5.6e-4, rtol=2.0e-2)
+    assert float(np.min(perturbation)) < -4.0e-5
+
+
 def test_state_npz_round_trip_preserves_arrays(tmp_path):
     grid = make_periodic_grid(48, 48, lx=96.0e3, ly=96.0e3)
     state = monopole_initial_states(grid)["base"]

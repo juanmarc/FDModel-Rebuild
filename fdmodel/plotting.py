@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +13,15 @@ from .grid import PeriodicGrid
 from .io import load_metadata_npz, load_state_npz
 
 
+@dataclass(frozen=True)
+class PlotConvention:
+    contour_levels: np.ndarray
+    gray_min: float | None
+    gray_max: float | None
+    black_min: float | None
+    negative_contour_levels: np.ndarray | None = None
+
+
 def plot_vorticity_plan_view(
     state: ModelState,
     path: str | Path,
@@ -19,6 +29,7 @@ def plot_vorticity_plan_view(
     title: str,
     extent_radius: float | None = None,
     levels: np.ndarray | None = None,
+    convention: PlotConvention | None = None,
     annotate_extrema: bool = True,
 ) -> None:
     """Plot a plan view of vorticity and save it to ``path``."""
@@ -39,15 +50,42 @@ def plot_vorticity_plan_view(
         y = y[ymask]
         zeta = zeta[np.ix_(ymask, xmask)]
 
+    if convention is None:
+        convention = _monopole_plot_convention()
     if levels is None:
-        levels = _vorticity_contour_levels()
+        levels = convention.contour_levels
 
     fig, ax = plt.subplots(figsize=(6.0, 5.8), constrained_layout=True)
     ax.set_facecolor("white")
-    _shade_vorticity_bands(ax, x, y, zeta)
+    _shade_vorticity_bands(ax, x, y, zeta, convention)
+    negative_levels = convention.negative_contour_levels
+    if negative_levels is not None:
+        negative_levels = negative_levels[
+            (negative_levels >= float(np.nanmin(zeta))) & (negative_levels <= float(np.nanmax(zeta)))
+        ]
+        negative_levels = np.sort(negative_levels)
+        if negative_levels.size:
+            negative_contours = ax.contour(
+                x,
+                y,
+                zeta,
+                levels=negative_levels,
+                colors="black",
+                linewidths=0.7,
+                linestyles="dotted",
+            )
+            ax.clabel(negative_contours, inline=True, fontsize=8, fmt=_format_scientific_label)
     contour_levels = levels[(levels >= float(np.nanmin(zeta))) & (levels <= float(np.nanmax(zeta)))]
     if contour_levels.size:
-        contours = ax.contour(x, y, zeta, levels=contour_levels, colors="black", linewidths=0.7)
+        contours = ax.contour(
+            x,
+            y,
+            zeta,
+            levels=contour_levels,
+            colors="black",
+            linewidths=0.7,
+            linestyles="solid",
+        )
         ax.clabel(contours, inline=True, fontsize=8, fmt=_format_scientific_label)
     ax.set_title(title)
     ax.set_xlabel(f"x ({coord_label})")
@@ -122,7 +160,8 @@ def plot_state_file(
     radial_path = output / f"{stem}_{suffix}_radial.png"
     if title is None:
         title = _title_from_metadata(metadata)
-    plot_vorticity_plan_view(state, plan_path, title=title, extent_radius=extent_radius)
+    convention = _plot_convention_from_metadata(metadata)
+    plot_vorticity_plan_view(state, plan_path, title=title, extent_radius=extent_radius, convention=convention)
     plot_radial_profiles(state, radial_path, title=title, bin_width=bin_width, max_radius=max_radius)
     return plan_path, radial_path
 
@@ -174,16 +213,56 @@ def _coordinate_scale(grid: PeriodicGrid) -> float:
     return 1000.0 if max(grid.lx, grid.ly) > 10_000.0 else 1.0
 
 
-def _vorticity_contour_levels() -> np.ndarray:
-    return np.array([5.0e-5] + [level * 1.0e-4 for level in range(1, 11)], dtype=float)
+def _plot_convention_from_metadata(metadata: dict[str, str]) -> PlotConvention:
+    if metadata.get("case") == "ring":
+        if metadata.get("component") == "perturbation":
+            return _ring_perturbation_plot_convention()
+        return _ring_plot_convention()
+    return _monopole_plot_convention()
 
 
-def _shade_vorticity_bands(ax, x: np.ndarray, y: np.ndarray, zeta: np.ndarray) -> None:
+def _monopole_plot_convention() -> PlotConvention:
+    return PlotConvention(
+        contour_levels=np.array([5.0e-5] + [level * 1.0e-4 for level in range(1, 11)], dtype=float),
+        gray_min=5.0e-5,
+        gray_max=1.0e-4,
+        black_min=1.0e-3,
+    )
+
+
+def _ring_plot_convention() -> PlotConvention:
+    return PlotConvention(
+        contour_levels=np.array([2.0e-4] + [level * 1.0e-3 for level in range(1, 11)], dtype=float),
+        gray_min=2.0e-4,
+        gray_max=1.0e-3,
+        black_min=6.0e-3,
+    )
+
+
+def _ring_perturbation_plot_convention() -> PlotConvention:
+    return PlotConvention(
+        contour_levels=np.arange(7.5e-5, 15.0e-4 + 7.5e-5, 7.5e-5, dtype=float),
+        gray_min=None,
+        gray_max=None,
+        black_min=None,
+        negative_contour_levels=-np.arange(4.0e-5, 8.0e-4 + 4.0e-5, 4.0e-5, dtype=float),
+    )
+
+
+def _shade_vorticity_bands(
+    ax,
+    x: np.ndarray,
+    y: np.ndarray,
+    zeta: np.ndarray,
+    convention: PlotConvention,
+) -> None:
+    if convention.gray_min is None or convention.gray_max is None or convention.black_min is None:
+        return
     zeta_min = float(np.nanmin(zeta))
     zeta_max = float(np.nanmax(zeta))
-    if zeta_min < 5.0e-5 and zeta_max > 5.0e-5:
-        upper = min(1.0e-4, zeta_max)
-        if upper > 5.0e-5:
-            ax.contourf(x, y, zeta, levels=[5.0e-5, upper], colors=["0.6"])
-    if zeta_max >= 1.0e-3:
-        ax.contourf(x, y, zeta, levels=[1.0e-3, zeta_max + 1.0e-12], colors=["black"])
+    if zeta_min < convention.gray_min and zeta_max > convention.gray_min:
+        upper = min(convention.gray_max, zeta_max)
+        if upper > convention.gray_min:
+            ax.contourf(x, y, zeta, levels=[convention.gray_min, upper], colors=["0.6"])
+    if zeta_max >= convention.black_min:
+        ax.contourf(x, y, zeta, levels=[convention.black_min, zeta_max + 1.0e-12], colors=["black"])

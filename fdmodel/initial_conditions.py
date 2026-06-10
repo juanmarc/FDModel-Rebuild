@@ -210,7 +210,7 @@ def schubert_ring_base_vorticity(
 
 def schubert_ring_perturbation_vorticity(
     grid: PeriodicGrid,
-    perturbation_amplitude: float = 1.0e-5,
+    perturbation_amplitude: float = 7.000808e-5,
     inner_ramp_radius: float = 22.5e3,
     outer_ramp_start_radius: float = 25.0e3,
     outer_radius: float = 32.5e3,
@@ -218,7 +218,13 @@ def schubert_ring_perturbation_vorticity(
     center: tuple[float, float] | None = None,
     enforce_zero_circulation: bool = True,
 ) -> np.ndarray:
-    """Return the azimuthal perturbation used by the legacy ring initializer."""
+    """Return the azimuthal perturbation for the Schubert ring case.
+
+    The ring experiment uses an equal-amplitude sum of azimuthal wavenumbers
+    1 through 8. The per-wavenumber amplitude is 1 percent of the ring maximum
+    vorticity, so the peak perturbation is approximately 8 percent of the ring
+    maximum where the modes align.
+    """
 
     if max_wavenumber < 1:
         raise ValueError("max_wavenumber must be positive")

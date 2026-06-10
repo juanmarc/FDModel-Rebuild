@@ -73,7 +73,7 @@ def grid_for_case(
     ny = ny if ny is not None else default_ny
     dx = dx if dx is not None else default_dx
     dy = dy if dy is not None else default_dy
-    if case == "monopole":
+    if case in {"monopole", "ring"}:
         return make_centered_periodic_grid(nx, ny, dx=dx, dy=dy)
     return make_periodic_grid(nx, ny, lx=nx * dx, ly=ny * dy)
 
