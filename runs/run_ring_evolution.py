@@ -19,9 +19,9 @@ from fdmodel.io import save_state_npz
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="runs/output/ring_evolution")
-    parser.add_argument("--max-time-count", type=int, default=11520)
-    parser.add_argument("--output-interval", type=int, default=960)
-    parser.add_argument("--dt", type=float, default=7.5)
+    parser.add_argument("--max-time-count", type=int, default=86400)
+    parser.add_argument("--output-interval", type=int, default=3600)
+    parser.add_argument("--dt", type=float, default=1.0)
     parser.add_argument("--viscosity", type=float, default=100.0)
     return parser.parse_args()
 
