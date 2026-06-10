@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 
 from .fields import ModelState
-from .grid import make_periodic_grid
+from .grid import PeriodicGrid
 
 
 def save_state_npz(
@@ -33,6 +33,8 @@ def save_state_npz(
         ny=np.array(state.grid.ny),
         lx=np.array(state.grid.lx),
         ly=np.array(state.grid.ly),
+        center_x=np.array(state.grid.center[0]),
+        center_y=np.array(state.grid.center[1]),
         x=state.grid.x,
         y=state.grid.y,
         zeta=state.zeta,
@@ -48,11 +50,22 @@ def load_state_npz(path: str | Path) -> ModelState:
     """Load a state file written by :func:`save_state_npz`."""
 
     data = np.load(Path(path), allow_pickle=False)
-    grid = make_periodic_grid(
-        int(data["nx"]),
-        int(data["ny"]),
+    x = np.array(data["x"])
+    y = np.array(data["y"])
+    X, Y = np.meshgrid(x, y, indexing="xy")
+    center_x = float(data["center_x"]) if "center_x" in data.files else 0.5 * float(data["lx"])
+    center_y = float(data["center_y"]) if "center_y" in data.files else 0.5 * float(data["ly"])
+    grid = PeriodicGrid(
+        nx=int(data["nx"]),
+        ny=int(data["ny"]),
         lx=float(data["lx"]),
         ly=float(data["ly"]),
+        x=x,
+        y=y,
+        X=X,
+        Y=Y,
+        center_x=center_x,
+        center_y=center_y,
     )
     return ModelState(
         grid=grid,

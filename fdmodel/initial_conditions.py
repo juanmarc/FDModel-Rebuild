@@ -14,10 +14,18 @@ def periodic_displacement(coord: np.ndarray, center: float, length: float) -> np
     return (coord - center + 0.5 * length) % length - 0.5 * length
 
 
-def zero_net_circulation(zeta: np.ndarray) -> np.ndarray:
-    """Subtract the spatial mean so total circulation is zero on a uniform grid."""
+def zero_net_circulation(zeta: np.ndarray, grid: PeriodicGrid | None = None) -> np.ndarray:
+    """Subtract a constant so area-integrated circulation is zero."""
 
-    return zeta - np.mean(zeta)
+    if grid is None or not grid.endpoint_inclusive:
+        correction = float(np.mean(zeta))
+    else:
+        if zeta.shape != grid.shape:
+            raise ValueError(f"zeta shape {zeta.shape} does not match grid shape {grid.shape}")
+        area = grid.lx * grid.ly
+        integral = float(np.trapezoid(np.trapezoid(zeta, x=grid.x, axis=1), x=grid.y, axis=0))
+        correction = integral / area
+    return zeta - correction
 
 
 def radial_distance(
@@ -26,7 +34,7 @@ def radial_distance(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return minimum-image x/y displacement and radius from ``center``."""
 
-    cx, cy = center if center is not None else (0.5 * grid.lx, 0.5 * grid.ly)
+    cx, cy = center if center is not None else grid.center
     dx = periodic_displacement(grid.X, cx, grid.lx)
     dy = periodic_displacement(grid.Y, cy, grid.ly)
     return dx, dy, np.hypot(dx, dy)
@@ -44,13 +52,13 @@ def gaussian_monopole_vorticity(
     if sigma <= 0.0:
         raise ValueError("sigma must be positive")
 
-    cx, cy = center if center is not None else (0.5 * grid.lx, 0.5 * grid.ly)
+    cx, cy = center if center is not None else grid.center
     dx = periodic_displacement(grid.X, cx, grid.lx)
     dy = periodic_displacement(grid.Y, cy, grid.ly)
     zeta = amplitude * np.exp(-(dx * dx + dy * dy) / (2.0 * sigma * sigma))
 
     if enforce_zero_circulation:
-        zeta = zero_net_circulation(zeta)
+        zeta = zero_net_circulation(zeta, grid)
     return zeta
 
 
@@ -76,7 +84,7 @@ def monopole_base_vorticity(
     zeta = zeta_max * np.exp(-((radius / decay_radius) ** 2))
 
     if enforce_zero_circulation:
-        zeta = zero_net_circulation(zeta)
+        zeta = zero_net_circulation(zeta, grid)
     return zeta
 
 
@@ -90,7 +98,8 @@ def monopole_perturbation_vorticity(
     """Return a localized Gaussian monopole perturbation."""
 
     if center is None:
-        center = (0.5 * grid.lx + 50.0e3, 0.5 * grid.ly)
+        cx, cy = grid.center
+        center = (cx + 54.0e3, cy)
     perturbation = monopole_base_vorticity(
         grid,
         zeta_max=zeta_max,
@@ -100,7 +109,7 @@ def monopole_perturbation_vorticity(
     )
 
     if enforce_zero_circulation:
-        perturbation = zero_net_circulation(perturbation)
+        perturbation = zero_net_circulation(perturbation, grid)
     return perturbation
 
 
@@ -121,7 +130,7 @@ def monopole_initial_states(
         decay_radius=perturbation_decay_fraction * decay_radius,
         center=perturbation_center,
     )
-    total = zero_net_circulation(base + perturbation)
+    total = zero_net_circulation(base + perturbation, grid)
     return {
         "base": state_from_vorticity(base, grid),
         "perturbation": state_from_vorticity(perturbation, grid),
@@ -144,14 +153,17 @@ def add_gaussian_perturbation(
     if sigma <= 0.0:
         raise ValueError("sigma must be positive")
 
-    cx, cy = center if center is not None else (0.6 * grid.lx, 0.5 * grid.ly)
+    if center is None:
+        grid_cx, grid_cy = grid.center
+        center = (grid_cx + 0.1 * grid.lx, grid_cy)
+    cx, cy = center
     dx = periodic_displacement(grid.X, cx, grid.lx)
     dy = periodic_displacement(grid.Y, cy, grid.ly)
     perturbation = amplitude * np.exp(-(dx * dx + dy * dy) / (2.0 * sigma * sigma))
     result = zeta + perturbation
 
     if enforce_zero_circulation:
-        result = zero_net_circulation(result)
+        result = zero_net_circulation(result, grid)
     return result
 
 
@@ -192,7 +204,7 @@ def schubert_ring_base_vorticity(
     zeta[mask] = ring_vorticity * smooth_step_down(fn)
 
     if enforce_zero_circulation:
-        zeta = zero_net_circulation(zeta)
+        zeta = zero_net_circulation(zeta, grid)
     return zeta
 
 
@@ -232,7 +244,7 @@ def schubert_ring_perturbation_vorticity(
 
     perturbation = perturbation_amplitude * sum_cos * envelope
     if enforce_zero_circulation:
-        perturbation = zero_net_circulation(perturbation)
+        perturbation = zero_net_circulation(perturbation, grid)
     return perturbation
 
 
@@ -241,7 +253,7 @@ def schubert_ring_initial_states(grid: PeriodicGrid) -> dict[str, ModelState]:
 
     base = schubert_ring_base_vorticity(grid)
     perturbation = schubert_ring_perturbation_vorticity(grid)
-    total = zero_net_circulation(base + perturbation)
+    total = zero_net_circulation(base + perturbation, grid)
     return {
         "base": state_from_vorticity(base, grid),
         "perturbation": state_from_vorticity(perturbation, grid),

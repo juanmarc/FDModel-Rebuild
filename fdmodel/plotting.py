@@ -27,8 +27,8 @@ def plot_vorticity_plan_view(
     grid = state.grid
     coord_scale = _coordinate_scale(grid)
     coord_label = "km" if coord_scale == 1000.0 else "model units"
-    x = (grid.x - 0.5 * grid.lx) / coord_scale
-    y = (grid.y - 0.5 * grid.ly) / coord_scale
+    x = (grid.x - grid.center[0]) / coord_scale
+    y = (grid.y - grid.center[1]) / coord_scale
     zeta = state.zeta
 
     if extent_radius is not None:

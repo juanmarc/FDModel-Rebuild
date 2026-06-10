@@ -1,12 +1,16 @@
 import numpy as np
 
 from fdmodel.diagnostics import azimuthal_mean_profile, radial_wind_profile
-from fdmodel.grid import make_periodic_grid
+from fdmodel.grid import make_centered_periodic_grid, make_periodic_grid
 from fdmodel.initial_conditions import (
     monopole_initial_states,
     schubert_ring_initial_states,
 )
 from fdmodel.io import load_metadata_npz, load_state_npz, save_state_npz
+
+
+def trapezoidal_circulation(zeta, grid):
+    return np.trapezoid(np.trapezoid(zeta, x=grid.x, axis=1), x=grid.y, axis=0)
 
 
 def test_monopole_initial_states_include_base_perturbation_and_total():
@@ -22,6 +26,18 @@ def test_monopole_initial_states_include_base_perturbation_and_total():
         assert state.v.shape == grid.shape
         assert abs(np.mean(state.zeta)) < 1.0e-18
         assert abs(np.mean(state.psi)) < 1.0e-14
+
+
+def test_monopole_base_state_uses_centered_grid_origin():
+    grid = make_centered_periodic_grid(301, 301, dx=2.0e3, dy=2.0e3)
+
+    states = monopole_initial_states(grid)
+    max_index = np.unravel_index(np.argmax(states["base"].zeta), grid.shape)
+
+    assert max_index == (150, 150)
+    assert np.isclose(grid.x[max_index[1]], 0.0)
+    assert np.isclose(grid.y[max_index[0]], 0.0)
+    assert abs(trapezoidal_circulation(states["base"].zeta, grid)) < 1.0e-7
 
 
 def test_ring_initial_states_include_base_perturbation_and_total():
@@ -45,6 +61,9 @@ def test_state_npz_round_trip_preserves_arrays(tmp_path):
     metadata = load_metadata_npz(path)
 
     assert loaded.grid.shape == state.grid.shape
+    assert loaded.grid.center == state.grid.center
+    assert np.allclose(loaded.grid.x, state.grid.x)
+    assert np.allclose(loaded.grid.y, state.grid.y)
     assert np.allclose(loaded.zeta, state.zeta)
     assert np.allclose(loaded.psi, state.psi)
     assert np.allclose(loaded.u, state.u)

@@ -11,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from fdmodel.evolution import EvolutionConfig, evolve_state
-from fdmodel.grid import make_periodic_grid
+from fdmodel.grid import make_centered_periodic_grid
 from fdmodel.initial_conditions import monopole_initial_states
 from fdmodel.io import save_state_npz
 
@@ -19,16 +19,16 @@ from fdmodel.io import save_state_npz
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="runs/output/monopole_evolution")
-    parser.add_argument("--max-time-count", type=int, default=2880)
-    parser.add_argument("--output-interval", type=int, default=240)
-    parser.add_argument("--dt", type=float, default=30.0)
+    parser.add_argument("--max-time-count", type=int, default=11520)
+    parser.add_argument("--output-interval", type=int, default=960)
+    parser.add_argument("--dt", type=float, default=7.5)
     parser.add_argument("--viscosity", type=float, default=100.0)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    grid = make_periodic_grid(300, 300, lx=600.0e3, ly=600.0e3)
+    grid = make_centered_periodic_grid(301, 301, dx=2.0e3, dy=2.0e3)
     initial_state = monopole_initial_states(grid)["total"]
     config = EvolutionConfig(
         dt=args.dt,
